@@ -19,7 +19,7 @@ func members(c *fiber.Ctx) error {
 	}
 	b.Grow(32)
 	for _, member := range etcdMembers {
-		fmt.Fprintf(&b, "%s||%t||%s, ", member.ClientURLs, member.IsLearner, member.PeerURLs, member)
+		fmt.Fprintf(&b, "%s||%t||%s||%d, ", member.ClientURLs, member.IsLearner, member.PeerURLs, member.ID)
 	}
 
 	return c.SendString(b.String())

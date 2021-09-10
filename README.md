@@ -1,10 +1,12 @@
-## Simulate a clustered etcd
+# Embedded etcd
 
-Pre-requisite
-* etcdctl
+This project is to simulate embedding etcd with high availability.
+
+## How to
+
+Before you start, you to satisfy these pre-requisites
+* etcdctl - https://github.com/etcd-io/etcd/releases
 * Must have these available ports `2379`, `2380`, `12379`, `12380`, `22379`, `22380`
-
-
 
 In this example, we will start a 3 node etcd cluster.  Each node's configuration is in the following files:
 
@@ -103,6 +105,13 @@ Then start the third node
 ```
 
 Now you have a working etcd HA cluster.
+
+## Endpoint
+
+The app tries to add simple endpoint to show the etcd member nodes.
+
+`http://localhost:3000/members`
+
 
 ## etcdctl helpful commands
 
