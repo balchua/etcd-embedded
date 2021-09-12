@@ -146,6 +146,36 @@ Check that the third node (`mk8s-2`) is all part of the cluster
 
 Now you have a working etcd HA cluster.
 
+## Removing a node from the cluster
+
+Go to any node and execute the following:
+
+```shell
+lxc exec mk8s-0 -- /home/ubuntu/etcd-embedded remove http://10.124.129.137:2379 mk8s-2 /home/ubuntu/config.yaml
+```
+
+Arguments are:
+* the endpoint of the leader node
+* the name of the node you wish to remove
+* the configuration file
+
+Inspect the member list using `etcdctl`
+
+```shell
+./etcdctl --endpoints=10.124.129.137:2379,10.124.129.151:2379,10.124.129.8:2379 endpoint status -w table
+{"level":"warn","ts":"2021-09-12T11:34:38.345+0800","logger":"etcd-client","caller":"v3/retry_interceptor.go:62","msg":"retrying of unary invoker failed","target":"etcd-endpoints://0xc0000d2a80/#initially=[10.124.129.137:2379;10.124.129.151:2379;10.124.129.8:2379]","attempt":0,"error":"rpc error: code = DeadlineExceeded desc = latest balancer error: last connection error: connection error: desc = \"transport: Error while dialing dial tcp 10.124.129.8:2379: connect: connection refused\""}
+Failed to get the status of endpoint 10.124.129.8:2379 (context deadline exceeded)
++---------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+|      ENDPOINT       |        ID        | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |
++---------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+| 10.124.129.137:2379 | 58a3d8673d099781 |   3.5.0 |   20 kB |      true |      false |         2 |         11 |                 11 |        |
+| 10.124.129.151:2379 | 71c4859c30bb0e6e |   3.5.0 |   20 kB |     false |      false |         2 |         11 |                 11 |        |
++---------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+
+```
+
+The error you see above is normal, since the remove node is automatically goes down and it is no longer listening to the ports.
+
 
 ## Endpoint
 

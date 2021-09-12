@@ -11,7 +11,7 @@ func AddMemberAsLearner(leaderEndpoint string, cfg *EtcdConfig) (*clientv3.Membe
 	var lg *zap.Logger
 	lg, err := zap.NewProduction()
 	peerUrls := make([]string, 1)
-	peerUrls[0] = cfg.ListenClientUrls
+	peerUrls[0] = cfg.ListenPeerUrls
 
 	lg.Info("AddMemberAsLearner", zap.String("peerUrl", peerUrls[0]), zap.String("LeaderEndpoint", leaderEndpoint))
 
