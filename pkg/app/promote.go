@@ -6,38 +6,36 @@ import (
 	"time"
 
 	eetcd "github.com/balchua/etcd-embedded/pkg/etcd"
-	"go.etcd.io/etcd/server/v3/embed"
+	"go.uber.org/zap"
 )
 
-func promote(etcdConfig string) {
-	cfg, err := embed.ConfigFromFile(etcdConfig)
+func promote(etcdConfig *eetcd.EtcdConfig) {
+	var lg *zap.Logger
+	lg, err := zap.NewProduction()
 
-	currentUrl := cfg.ACUrls[0].String()
+	currentUrl := etcdConfig.AdvertiseClientUrls
 	if !eetcd.IsLeader(currentUrl) {
 		return
 	}
 
-	etcdMembers, err := eetcd.ShowMembers(currentUrl)
+	etcdMembers, err := eetcd.ShowMembers(etcdConfig)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 	for _, member := range etcdMembers {
 		if member.IsLearner {
-			resp, err := eetcd.Promote(currentUrl, member.ID)
+			response, err := eetcd.Promote(currentUrl, member.ID)
 			if err != nil {
-				log.Printf("Member ID: %d is not ready for promotion", member.ID)
-			} else {
-				log.Printf("Promoted member %d, ", resp.Header.MemberId)
+				lg.Info("Member is not ready for promotion.", zap.Uint64("memberId", member.ID))
+				continue
 			}
-
+			lg.Info("Member promoted.", zap.Uint64("memberId", response.Header.MemberId))
 		}
 	}
-
-	return
 }
 
-func DoPromote(ctx context.Context, etcdConfig string) {
+func DoPromote(ctx context.Context, etcdConfig *eetcd.EtcdConfig) {
 
 	ticker := time.NewTicker(5 * time.Second)
 	for {

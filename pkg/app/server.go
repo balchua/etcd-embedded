@@ -2,22 +2,19 @@ package app
 
 import (
 	"fmt"
-	"log"
 	"net"
 
+	"github.com/balchua/etcd-embedded/pkg/etcd"
 	"github.com/gofiber/fiber/v2"
-	"go.etcd.io/etcd/server/v3/embed"
+	"go.uber.org/zap"
 )
 
-var (
-	cfg                *embed.Config
-	advertiseClientUrl string
-)
+var etcdConfig *etcd.EtcdConfig
 
-func Start(config string) {
+func Start(cfg *etcd.EtcdConfig) {
+	etcdConfig = cfg
+	lg, _ := zap.NewProduction()
 	port := "3000"
-	cfg, err := embed.ConfigFromFile(config)
-	advertiseClientUrl = cfg.ACUrls[0].String()
 
 	if !isPortAvailable(port) {
 		return
@@ -33,15 +30,16 @@ func Start(config string) {
 	// Start server
 	appErr := app.Listen(":" + port)
 	if appErr != nil {
-		log.Printf("Unable to start the web server, this is fine %v", err)
+		lg.Warn("Unable to start the web server, this is fine ")
 	}
 }
 
 func isPortAvailable(port string) bool {
+	lg, _ := zap.NewProduction()
 	ln, err := net.Listen("tcp", ":"+port)
 
 	if err != nil {
-		log.Print("Port 3000 is already in use.")
+		lg.Info("Port is already in use.", zap.String("port", port))
 		return false
 	}
 

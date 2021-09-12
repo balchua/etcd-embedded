@@ -1,26 +1,37 @@
 package app
 
 import (
-	"fmt"
 	"log"
-	"strings"
 
 	betcd "github.com/balchua/etcd-embedded/pkg/etcd"
 	"github.com/gofiber/fiber/v2"
 )
 
-func members(c *fiber.Ctx) error {
-	var b strings.Builder
+type ClusterMember struct {
+	ClientURLs []string `json:"client_urls"`
+	IsLearner  bool     `json:"learner"`
+	PeerURLs   []string `json:"peer_urls"`
+	Id         uint64   `json:"id"`
+	Name       string   `json:"name"`
+}
 
-	etcdMembers, err := betcd.ShowMembers(advertiseClientUrl)
+func members(c *fiber.Ctx) error {
+	var response []ClusterMember
+
+	etcdMembers, err := betcd.ShowMembers(etcdConfig)
 
 	if err != nil {
 		log.Fatal(err)
 	}
-	b.Grow(32)
+
 	for _, member := range etcdMembers {
-		fmt.Fprintf(&b, "%s||%t||%s||%d, ", member.ClientURLs, member.IsLearner, member.PeerURLs, member.ID)
+		membr := ClusterMember{}
+		membr.ClientURLs = member.ClientURLs
+		membr.PeerURLs = member.PeerURLs
+		membr.Id = member.ID
+		membr.Name = member.Name
+		response = append(response, membr)
 	}
 
-	return c.SendString(b.String())
+	return c.JSON(response)
 }

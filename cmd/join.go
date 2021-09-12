@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
+	"strings"
 
 	eetcd "github.com/balchua/etcd-embedded/pkg/etcd"
 	"github.com/spf13/cobra"
-	"go.etcd.io/etcd/server/v3/embed"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -26,13 +29,41 @@ var joinCmd = &cobra.Command{
 	},
 }
 
-func join(leaderEndpoint string, config string) {
-	cfg, err := embed.ConfigFromFile(config)
+func join(leaderEndpoint string, configFile string) {
+	lg, err := zap.NewProduction()
+	etcdConfig := eetcd.LoadEtcdConfig(configFile)
 
-	memberResponse, err := eetcd.AddMemberAsLearner(leaderEndpoint, cfg.LPUrls[0].String())
+	memberResponse, err := eetcd.AddMemberAsLearner(leaderEndpoint, etcdConfig)
+
 	if err != nil {
 		log.Print(err)
 	}
-	log.Printf("PeerURL: %s, MemberId %d, ClientURL: %s, IsLearner: %t", memberResponse.Member.GetPeerURLs(), memberResponse.Member.ID, memberResponse.Member.ClientURLs, memberResponse.Member.IsLearner)
+	lg.Info("Join Successful.",
+		zap.Strings("PeerURL", memberResponse.Member.PeerURLs),
+		zap.Uint64("MemberId", memberResponse.Member.ID),
+		zap.Strings("ClientURL", memberResponse.Member.ClientURLs),
+		zap.Bool("IsLearner", memberResponse.Member.IsLearner))
+
+	etcdConfig.InitialClusterState = "existing"
+	setInitialCluster(memberResponse, etcdConfig, configFile)
+
+}
+
+func setInitialCluster(memberResponse *clientv3.MemberAddResponse, etcdConfig *eetcd.EtcdConfig, configFile string) {
+	conf := []string{}
+	newMemberId := memberResponse.Member.ID
+	for _, member := range memberResponse.Members {
+
+		for _, u := range member.PeerURLs {
+			n := member.Name
+			if member.ID == newMemberId {
+				n = etcdConfig.Name
+			}
+			conf = append(conf, fmt.Sprintf("%s=%s", n, u))
+		}
+	}
+
+	etcdConfig.InitialCluster = strings.Join(conf[:], ",")
+	etcdConfig.ToFile(configFile)
 
 }

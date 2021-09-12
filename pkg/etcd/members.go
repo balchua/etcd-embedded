@@ -2,7 +2,8 @@ package etcd
 
 import (
 	"context"
-	"log"
+
+	"go.uber.org/zap"
 )
 
 type EtcdMember struct {
@@ -10,17 +11,23 @@ type EtcdMember struct {
 	IsLearner  bool
 	PeerURLs   []string
 	ID         uint64
+	Name       string
 }
 
-func ShowMembers(endpoint string) ([]EtcdMember, error) {
+func ShowMembers(etcdConfig *EtcdConfig) ([]EtcdMember, error) {
+	var lg *zap.Logger
+	lg, err := zap.NewProduction()
+
 	var endpoints []string
 	endpoints = make([]string, 1)
-	endpoints[0] = endpoint
+	endpoints[0] = etcdConfig.AdvertiseClientUrls
+
 	cli := NewEtcdClient(endpoints)
 	defer cli.Close()
 	resp, err := cli.MemberList(context.Background())
+
 	if err != nil {
-		log.Fatal(err)
+		lg.Warn("", zap.Error(err))
 		return nil, err
 	}
 
@@ -31,9 +38,9 @@ func ShowMembers(endpoint string) ([]EtcdMember, error) {
 			IsLearner:  member.IsLearner,
 			PeerURLs:   member.PeerURLs,
 			ID:         member.ID,
+			Name:       member.Name,
 		}
 		members = append(members, etcdMember)
-
 	}
 
 	return members, nil

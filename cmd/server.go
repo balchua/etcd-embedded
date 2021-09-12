@@ -8,6 +8,7 @@ import (
 
 	"github.com/balchua/etcd-embedded/pkg/app"
 	eetcd "github.com/balchua/etcd-embedded/pkg/etcd"
+
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 )
@@ -24,7 +25,8 @@ var serverCmd = &cobra.Command{
 		if len(args) < 1 {
 			log.Fatal("Invalid arguments")
 		}
-		etcdConfig := args[0]
+		etcdConfig := eetcd.LoadEtcdConfig(args[0])
+		etcdConfig.ToFile(args[0])
 		go eetcd.StartEtcd(context.Background(), etcdConfig)
 		go app.DoPromote(context.Background(), etcdConfig)
 		go app.Start(etcdConfig)
