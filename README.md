@@ -6,105 +6,146 @@ This project is to simulate embedding etcd with high availability.
 
 Before you start, you to satisfy these pre-requisites
 * etcdctl - https://github.com/etcd-io/etcd/releases
-* Must have these available ports `2379`, `2380`, `12379`, `12380`, `22379`, `22380`
+* lxd - This will be used to simulate multi node etcd
+* Must have these available ports `2379`, `2380`
 
-In this example, we will start a 3 node etcd cluster.  Each node's configuration is in the following files:
+## Build
 
-* First node `config.yaml`
-* Second node `config2.yaml`
-* Third node `config3.yaml`
+Simply run `go build .`
 
-Check the content of each yaml and make sure that the ports do not interfere with your existing system.
-Example, the path where etcd stores its data, currently hardcoded to the following directories
+## Setting up the lxd
 
-```yaml
-# Path to the data directory.
-data-dir: /home/thor/etcd-data/data
-
-# Path to the dedicated wal directory.
-wal-dir: /home/thor/etcd-data/data
-```
-
-## First start the main server
+We will start a 3 node LXD instance.  Launch an LXD instance
 
 ```shell
-./etcd-embedded server ./config.yaml
+lxc launch -p default -p microk8s ubuntu:20.04 mk8s-0
+lxc launch -p default -p microk8s ubuntu:20.04 mk8s-1
+lxc launch -p default -p microk8s ubuntu:20.04 mk8s-2
 ```
 
-## Add the second node as a learner.
+### Copy the default config and  binary lxd instance
 
 ```shell
-./etcd-embedded join http://localhost:2379 ./config2.yaml
-```
+lxc file push default-config.yaml mk8s-0/home/ubuntu/config.yaml
+lxc file push default-config.yaml mk8s-1/home/ubuntu/config.yaml
+lxc file push default-config.yaml mk8s-2/home/ubuntu/config.yaml
 
-Before starting the second node, check  that the node is added as a learner.
-
-```shell
-./etcdctl member list --endpoints=localhost:2379,localhost:12379,localhost:22379 -w table
-+------------------+-----------+------+------------------------+-----------------------+------------+
-|        ID        |  STATUS   | NAME |       PEER ADDRS       |     CLIENT ADDRS      | IS LEARNER |
-+------------------+-----------+------+------------------------+-----------------------+------------+
-| 8e9e05c52164694d |   started |   n0 |  http://localhost:2380 | http://localhost:2379 |      false |
-| 97bbfd74ce4e6ce4 | unstarted |      | http://localhost:12380 |                       |       true |
-+------------------+-----------+------+------------------------+-----------------------+------------+
+lxc file push etcd-embedded mk8s-0/home/ubuntu/etcd-embedded
+lxc file push etcd-embedded mk8s-1/home/ubuntu/etcd-embedded
+lxc file push etcd-embedded mk8s-2/home/ubuntu/etcd-embedded
 
 ```
 
-Then start the second node
+### Get all lxd instance IPs
 
 ```shell
-./etcd-embedded server ./config2.yaml
+lxc list
+
++-----------------------+---------+-----------------------+------+-----------+-----------+
+|         NAME          |  STATE  |         IPV4          | IPV6 |   TYPE    | SNAPSHOTS |
++-----------------------+---------+-----------------------+------+-----------+-----------+
+| mk8s-0                | RUNNING | 10.124.129.137 (eth0) |      | CONTAINER | 0         |
++-----------------------+---------+-----------------------+------+-----------+-----------+
+| mk8s-1                | RUNNING | 10.124.129.151 (eth0) |      | CONTAINER | 0         |
++-----------------------+---------+-----------------------+------+-----------+-----------+
+| mk8s-2                | RUNNING | 10.124.129.8 (eth0)   |      | CONTAINER | 0         |
++-----------------------+---------+-----------------------+------+-----------+-----------+
+
+```
+## First start (`mk8s-0`) the main server
+
+```shell
+lxc exec mk8s-0 -- /home/ubuntu/etcd-embedded server /home/ubuntu/config.yaml
+```
+
+## Add the second node (`mk8s-1`) as a learner.
+
+```shell
+lxc exec mk8s-1 -- /home/ubuntu/etcd-embedded join http://10.124.129.137:2380 /home/ubuntu/config.yaml
+```
+
+Before starting the second node (`mk8s-1`), check  that the node is added as a learner.
+
+```shell
+
+./etcdctl --endpoints=10.124.129.137:2379,10.124.129.151:2379,10.124.129.8:2379 member list -w table
++------------------+-----------+--------+----------------------------+----------------------------+------------+
+|        ID        |  STATUS   |  NAME  |         PEER ADDRS         |        CLIENT ADDRS        | IS LEARNER |
++------------------+-----------+--------+----------------------------+----------------------------+------------+
+| 58a3d8673d099781 |   started | mk8s-0 | http://10.124.129.137:2380 | http://10.124.129.137:2379 |      false |
+| dd94fc49fe0983b8 | unstarted |        | http://10.124.129.151:2379 |                            |       true |
++------------------+-----------+--------+----------------------------+----------------------------+------------+
+
+```
+
+Then start the second node (`mk8s-1`)
+
+```shell
+lxc exec mk8s-1 -- /home/ubuntu/etcd-embedded server /home/ubuntu/config.yaml
 ```
 
 Wait for a few seconds, the promotion to a voter node is automatic.
 
 ```shell
-./etcdctl member list --endpoints=localhost:2379,localhost:12379,localhost:22379 -w table
-+------------------+---------+------+------------------------+------------------------+------------+
-|        ID        | STATUS  | NAME |       PEER ADDRS       |      CLIENT ADDRS      | IS LEARNER |
-+------------------+---------+------+------------------------+------------------------+------------+
-| 8e9e05c52164694d | started |   n0 |  http://localhost:2380 |  http://localhost:2379 |      false |
-| 97bbfd74ce4e6ce4 | started |   n1 | http://localhost:12380 | http://localhost:12379 |      false |
-+------------------+---------+------+------------------------+------------------------+------------+
+./etcdctl --endpoints=10.124.129.137:2379,10.124.129.151:2379,10.124.129.8:2379 member list -w table
++------------------+---------+--------+----------------------------+----------------------------+------------+
+|        ID        | STATUS  |  NAME  |         PEER ADDRS         |        CLIENT ADDRS        | IS LEARNER |
++------------------+---------+--------+----------------------------+----------------------------+------------+
+| 58a3d8673d099781 | started | mk8s-0 | http://10.124.129.137:2380 | http://10.124.129.137:2379 |      false |
+| dd94fc49fe0983b8 | started | mk8s-1 | http://10.124.129.151:2379 | http://10.124.129.151:2379 |      false |
++------------------+---------+--------+----------------------------+----------------------------+------------+
+
 ```
 
-## Add the third node as a learner.
+## Add the third node (`mk8s-2`) as a learner.
 
 ```shell
-./etcd-embedded join http://localhost:2379 ./config3.yaml
+lxc exec mk8s-2 -- /home/ubuntu/etcd-embedded join http://10.124.129.137:2380 /home/ubuntu/config.yaml
+{"level":"info","ts":1631414981.2671242,"caller":"util/network.go:21","msg":"Interface is a loopback","name":"lo"}
+{"level":"info","ts":1631414981.2682645,"caller":"util/network.go:30","msg":"Interface details","name":"eth0","isUp":true}
+{"level":"info","ts":1631414981.2686086,"caller":"util/network.go:34","msg":"Interface name"}
+{"level":"info","ts":1631414981.2686648,"caller":"util/network.go:37","msg":"IP found","ip":"10.124.129.8"}
+{"level":"info","ts":1631414981.2689445,"caller":"etcd/learner.go:16","msg":"AddMemberAsLearner","peerUrl":"http://10.124.129.8:2379","LeaderEndpoint":"http://10.124.129.137:2380"}
+{"level":"info","ts":1631414981.2927167,"caller":"cmd/join.go:41","msg":"Join Successful.","PeerURL":["http://10.124.129.8:2379"],"MemberId":2288430810285401478,"ClientURL":[],"IsLearner":true}
+
 ```
 
-Before starting the third node, check  that the node is added as a learner.
+Before starting the third node (`mk8s-2`), check that the node is added as a learner.
 
 ```shell
-./etcdctl member list --endpoints=localhost:2379,localhost:12379,localhost:22379 -w table
-+------------------+-----------+------+------------------------+------------------------+------------+
-|        ID        |  STATUS   | NAME |       PEER ADDRS       |      CLIENT ADDRS      | IS LEARNER |
-+------------------+-----------+------+------------------------+------------------------+------------+
-| 278f416e9d2430e9 | unstarted |      | http://localhost:22380 |                        |       true |
-| 8e9e05c52164694d |   started |   n0 |  http://localhost:2380 |  http://localhost:2379 |      false |
-| 97bbfd74ce4e6ce4 |   started |   n1 | http://localhost:12380 | http://localhost:12379 |      false |
-+------------------+-----------+------+------------------------+------------------------+------------+
+./etcdctl --endpoints=10.124.129.137:2379,10.124.129.151:2379,10.124.129.8:2379 member list -w table
++------------------+-----------+--------+----------------------------+----------------------------+------------+
+|        ID        |  STATUS   |  NAME  |         PEER ADDRS         |        CLIENT ADDRS        | IS LEARNER |
++------------------+-----------+--------+----------------------------+----------------------------+------------+
+| 1fc223b2841ee586 | unstarted |        |   http://10.124.129.8:2379 |                            |       true |
+| 58a3d8673d099781 |   started | mk8s-0 | http://10.124.129.137:2380 | http://10.124.129.137:2379 |      false |
+| dd94fc49fe0983b8 |   started | mk8s-1 | http://10.124.129.151:2379 | http://10.124.129.151:2379 |      false |
++------------------+-----------+--------+----------------------------+----------------------------+------------+
+
 ```
 
-Then start the third node
+Then start the third node (`mk8s-2`)
 
 ```shell
-./etcd-embedded server ./config3.yaml
+lxc exec mk8s-2 -- /home/ubuntu/etcd-embedded server /home/ubuntu/config.yaml
 ```
 
+Check that the third node (`mk8s-2`) is all part of the cluster
+
 ```shell
-./etcdctl member list --endpoints=localhost:2379,localhost:12379,localhost:22379 -w table
-+------------------+---------+------+------------------------+------------------------+------------+
-|        ID        | STATUS  | NAME |       PEER ADDRS       |      CLIENT ADDRS      | IS LEARNER |
-+------------------+---------+------+------------------------+------------------------+------------+
-| 278f416e9d2430e9 | started |   n2 | http://localhost:22380 | http://localhost:22379 |      false |
-| 8e9e05c52164694d | started |   n0 |  http://localhost:2380 |  http://localhost:2379 |      false |
-| 97bbfd74ce4e6ce4 | started |   n1 | http://localhost:12380 | http://localhost:12379 |      false |
-+------------------+---------+------+------------------------+------------------------+------------+
+./etcdctl --endpoints=10.124.129.137:2379,10.124.129.151:2379,10.124.129.8:2379 member list -w table
++------------------+---------+--------+----------------------------+----------------------------+------------+
+|        ID        | STATUS  |  NAME  |         PEER ADDRS         |        CLIENT ADDRS        | IS LEARNER |
++------------------+---------+--------+----------------------------+----------------------------+------------+
+| 1fc223b2841ee586 | started | mk8s-2 |   http://10.124.129.8:2379 |   http://10.124.129.8:2379 |      false |
+| 58a3d8673d099781 | started | mk8s-0 | http://10.124.129.137:2380 | http://10.124.129.137:2379 |      false |
+| dd94fc49fe0983b8 | started | mk8s-1 | http://10.124.129.151:2379 | http://10.124.129.151:2379 |      false |
++------------------+---------+--------+----------------------------+----------------------------+------------+
+
 ```
 
 Now you have a working etcd HA cluster.
+
 
 ## Endpoint
 
