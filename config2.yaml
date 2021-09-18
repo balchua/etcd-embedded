@@ -1,9 +1,6 @@
 ---
 # This is the configuration file for the etcd server.
 
-# Human-readable name for this member.
-name: 'node0'
-
 # Path to the data directory.
 data-dir: /home/thor/etcd-data/data
 

@@ -27,7 +27,9 @@ var serverCmd = &cobra.Command{
 		}
 		etcdConfig := eetcd.LoadEtcdConfig(args[0])
 		etcdConfig.ToFile(args[0])
-		go eetcd.StartEtcd(context.Background(), etcdConfig)
+		e, _ := eetcd.NewEtcd(etcdConfig)
+
+		go e.StartEtcd(context.Background(), etcdConfig)
 		go app.DoPromote(context.Background(), etcdConfig)
 		go app.Start(etcdConfig)
 

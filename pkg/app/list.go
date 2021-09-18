@@ -3,7 +3,7 @@ package app
 import (
 	"log"
 
-	betcd "github.com/balchua/etcd-embedded/pkg/etcd"
+	eetcd "github.com/balchua/etcd-embedded/pkg/etcd"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -17,8 +17,12 @@ type ClusterMember struct {
 
 func members(c *fiber.Ctx) error {
 	var response []ClusterMember
+	e, etcdErr := eetcd.NewEtcd(etcdConfig)
 
-	etcdMembers, err := betcd.ShowMembers(etcdConfig)
+	if etcdErr != nil {
+		return etcdErr
+	}
+	etcdMembers, err := e.ShowMembers()
 
 	if err != nil {
 		log.Fatal(err)

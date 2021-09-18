@@ -30,8 +30,11 @@ var removeCmd = &cobra.Command{
 func remove(leaderEndpoint string, nodeName string, configFile string) {
 	lg, _ := zap.NewProduction()
 	etcdConfig := eetcd.LoadEtcdConfig(configFile)
-
-	remove_err := eetcd.RemoveMember(leaderEndpoint, nodeName, etcdConfig)
+	e, etcdErr := eetcd.NewEtcd(etcdConfig)
+	if etcdErr != nil {
+		lg.Error("Failed to initialize etcd client", zap.Error(etcdErr))
+	}
+	remove_err := e.RemoveMember(leaderEndpoint, nodeName)
 
 	if remove_err != nil {
 		log.Print(remove_err)

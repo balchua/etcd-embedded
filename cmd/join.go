@@ -32,8 +32,11 @@ var joinCmd = &cobra.Command{
 func join(leaderEndpoint string, configFile string) {
 	lg, err := zap.NewProduction()
 	etcdConfig := eetcd.LoadEtcdConfig(configFile)
-
-	memberResponse, err := eetcd.AddMemberAsLearner(leaderEndpoint, etcdConfig)
+	e, etcdErr := eetcd.NewEtcd(etcdConfig)
+	if etcdErr != nil {
+		lg.Error("Failed to initialize etcd client", zap.Error(etcdErr))
+	}
+	memberResponse, err := e.AddMemberAsLearner(leaderEndpoint)
 
 	if err != nil {
 		log.Print(err)
